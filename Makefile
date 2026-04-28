@@ -1,11 +1,16 @@
 CC = cc
-CFLAGS = -g -Wall -Wextra -std=c11 -I.
+CFLAGS = -g -Wall -Wextra -std=c11 -I. -MMD -MP
 
 BUILD_DIR = build
 TEST_DIR = tests
 
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
 TEST_BINS = $(patsubst $(TEST_DIR)/%.c,$(BUILD_DIR)/%,$(TEST_SRCS))
+
+$(BUILD_DIR)/%: $(TEST_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+-include $(TEST_BINS:=.d)
 
 .PHONY: all clean test
 
