@@ -115,10 +115,9 @@ void test_removal_at_specific_position() {
 void test_append_range() {
   Numbers numbers = {0};
 
-  const int count = 4;
-  int list[count] = {0, 1, 2, 3};
+  int list[4] = {0, 1, 2, 3};
 
-  vec_append_range(&numbers, list, count);
+  vec_append_range(&numbers, list, 4);
 
   for (size_t i = 0; i < numbers.size; ++i) {
     int element = list[i];
@@ -131,10 +130,9 @@ void test_append_range() {
 void test_clone() {
   Numbers numbers = {0};
   Numbers target = {0};
-  const int count = 10;
-  int list[count] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  int list[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  vec_append_range(&numbers, list, count);
+  vec_append_range(&numbers, list, 10);
   vec_clone(&numbers, &target);
 
   for (size_t i = 0; i < target.size; ++i) {
@@ -150,10 +148,9 @@ void test_filter() {
   Numbers numbers = {0};
   Numbers target = {0};
 
-  const int count = 10;
-  int list[count] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  int list[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  vec_append_range(&numbers, list, count);
+  vec_append_range(&numbers, list, 10);
   vec_filter(&numbers, &target, is_even);
 
   for (size_t i = 0; i < target.size; ++i) {
