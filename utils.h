@@ -15,16 +15,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define TEST_ASSERT(cond, fmt, ...)                                            \
-  do {                                                                         \
-    if (cond) {                                                                \
-      printf("[PASS] " fmt "\n", ##__VA_ARGS__);                               \
-    } else {                                                                   \
-      printf("[FAIL] " fmt " (%s:%d)\n", ##__VA_ARGS__, __FILE__, __LINE__);   \
-      exit(1);                                                                 \
-    }                                                                          \
-  } while (0)
-
 void *xmalloc(size_t size) {
   void *ptr = malloc(size);
   if (!ptr) {
