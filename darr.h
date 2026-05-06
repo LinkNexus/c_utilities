@@ -14,10 +14,6 @@ typedef struct {
   void (*destructor)(void *val);
 } DarrHdr;
 
-#define darr_print_err_msg(fmt, ...)                                           \
-  (fprintf(stderr, "Error at (%s:%d): " fmt "\n", __FILE__, __LINE__,          \
-           ##__VA_ARGS__))
-
 #define DARR_HDR(darr) ((DarrHdr *)(darr) - 1)
 
 #define darr_len(darr) (DARR_HDR(darr)->size)
@@ -44,12 +40,12 @@ typedef struct {
     DarrHdr *hdr = DARR_HDR(darr);                                             \
                                                                                \
     if (new_cap < hdr->size) {                                                 \
-      darr_print_err_msg("darr_reserve: new_cap smaller than current size");   \
+      print_fn_err_msg("darr_reserve: new_cap smaller than current size");     \
       break;                                                                   \
     }                                                                          \
                                                                                \
     if (new_cap > SIZE_MAX / sizeof *(darr)) {                                 \
-      darr_print_err_msg("darr_reserve: Capacity overflow");                   \
+      print_fn_err_msg("darr_reserve: Capacity overflow");                     \
       break;                                                                   \
     }                                                                          \
                                                                                \
@@ -109,7 +105,7 @@ typedef struct {
     DarrHdr *hdr = DARR_HDR(darr);                                             \
                                                                                \
     if ((idx) > hdr->size) {                                                   \
-      darr_print_err_msg("darr_set: Index %zu out of bounds", (size_t)(idx));  \
+      print_fn_err_msg("darr_set: Index %zu out of bounds", (size_t)(idx));    \
       break;                                                                   \
     }                                                                          \
                                                                                \
@@ -126,8 +122,8 @@ typedef struct {
     DarrHdr *hdr = DARR_HDR(darr);                                             \
                                                                                \
     if ((idx) > hdr->size) {                                                   \
-      darr_print_err_msg("darr_insert_at: Index %zu out of bounds",            \
-                         (size_t)(idx));                                       \
+      print_fn_err_msg("darr_insert_at: Index %zu out of bounds",              \
+                       (size_t)(idx));                                         \
       break;                                                                   \
     }                                                                          \
                                                                                \
@@ -145,8 +141,8 @@ typedef struct {
     DarrHdr *hdr = DARR_HDR(darr);                                             \
                                                                                \
     if ((idx) >= hdr->size) {                                                  \
-      darr_print_err_msg("darr_remove_at: Index %zu out of bounds",            \
-                         (size_t)(idx));                                       \
+      print_fn_err_msg("darr_remove_at: Index %zu out of bounds",              \
+                       (size_t)(idx));                                         \
       break;                                                                   \
     }                                                                          \
                                                                                \
