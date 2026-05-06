@@ -1,5 +1,5 @@
 CC = cc
-CFLAGS = -g -Wall -Wextra -std=c23 -I. -MMD -MP
+CFLAGS = -g -Wall -Wextra -std=c23 -I. -MMD -MP -fsanitize=address -fsanitize=undefined
 
 BUILD_DIR = build
 TEST_DIR = tests
