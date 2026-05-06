@@ -4,7 +4,6 @@
 #include "darr.h"
 #include "strv.h"
 #include "utils.h"
-#include <cstring>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -33,7 +32,7 @@ static inline Dstr dstr_create(void) {
 
 static inline Dstr dstr_from(const char *c_str) {
   size_t input_len = strlen(c_str);
-  DstrHdr *hdr = (DstrHdr *)xmalloc(input_len + sizeof *hdr);
+  DstrHdr *hdr = (DstrHdr *)xmalloc(input_len + 1 + sizeof *hdr);
 
   hdr->size = input_len;
   hdr->cap = input_len + 1;
@@ -43,7 +42,7 @@ static inline Dstr dstr_from(const char *c_str) {
 }
 
 static inline Dstr dstr_from_strv(const Strv strv) {
-  DstrHdr *hdr = (DstrHdr *)xmalloc(strv.len + sizeof *hdr);
+  DstrHdr *hdr = (DstrHdr *)xmalloc(strv.len + 1 + sizeof *hdr);
   hdr->size = strv.len;
   hdr->cap = strv.len + 1;
   memcpy(hdr->buf, strv.buf, strv.len);
