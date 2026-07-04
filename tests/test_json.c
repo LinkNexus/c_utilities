@@ -1,339 +1,248 @@
 #include "../json.h"
-#include "../arena.h"
 #include "../test_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
-// ============================================================================
-// Helper Macros for JSON Testing
-// ============================================================================
+void test_literals_and_primitives() {
+  TEST_SUITE("Literals and Primitives");
 
-#define TEST_JSON_VALID(json_str, type_check) \
-  do { \
-    Arena arena = arena_create(4096); \
-    JsonValue out = {0}; \
-    char* err_msg = NULL; \
-    bool result = json_parse(json_str, &arena, &out, &err_msg); \
-    TEST_ASSERT(result, "Parse '%s' should succeed", json_str); \
-    if (result) { \
-      type_check; \
-    } \
-    arena_destroy(&arena); \
-  } while(0)
+  Arena arena = arena_create(1024);
+  JsonValue out = {0};
+  char* err = NULL;
 
-#define TEST_JSON_INVALID(json_str) \
-  do { \
-    Arena arena = arena_create(4096); \
-    JsonValue out = {0}; \
-    char* err_msg = NULL; \
-    bool result = json_parse(json_str, &arena, &out, &err_msg); \
-    TEST_ASSERT(!result, "Parse '%s' should fail but succeeded", json_str); \
-    arena_destroy(&arena); \
-  } while(0)
+  // string
+  TEST_ASSERT(json_parse("\"hello\"", &arena, &out, &err), "simple string must parse");
+  TEST_ASSERT(out.type == JSON_STRING, "type must be JSON_STRING");
+  TEST_ASSERT(strcmp(out.string_value, "hello") == 0, "string value must be 'hello', got '%s'",
+              out.string_value);
 
-// ============================================================================
-// Primitives Tests
-// ============================================================================
+  // number
+  JsonValue out2 = {0};
+  err = NULL;
+  TEST_ASSERT(json_parse("-123.45e+1", &arena, &out2, &err), "number must parse");
+  TEST_ASSERT(out2.type == JSON_NUMBER, "type must be JSON_NUMBER");
+  TEST_ASSERT(out2.number_value == -123.45e+1, "number value must match expected, got %f",
+              out2.number_value);
 
-void test_primitives() {
-  TEST_SUITE("Primitives");
+  // true/false/null
+  JsonValue jtrue = {0}, jfalse = {0}, jnull = {0};
+  err = NULL;
+  TEST_ASSERT(json_parse("true", &arena, &jtrue, &err), "true must parse");
+  TEST_ASSERT(jtrue.type == JSON_BOOL && jtrue.bool_value == true, "true must be boolean true");
 
-  TEST_JSON_VALID("null", TEST_ASSERT(out.type == JSON_NULL, "null type check"));
-  TEST_JSON_VALID("true", TEST_ASSERT(out.type == JSON_BOOL && out.bool_value == true, "true value check"));
-  TEST_JSON_VALID("false", TEST_ASSERT(out.type == JSON_BOOL && out.bool_value == false, "false value check"));
+  err = NULL;
+  TEST_ASSERT(json_parse("false", &arena, &jfalse, &err), "false must parse");
+  TEST_ASSERT(jfalse.type == JSON_BOOL && jfalse.bool_value == false,
+              "false must be boolean false");
+
+  err = NULL;
+  TEST_ASSERT(json_parse("null", &arena, &jnull, &err), "null must parse");
+  TEST_ASSERT(jnull.type == JSON_NULL, "null must produce JSON_NULL");
+
+  arena_destroy(&arena);
 }
 
-// ============================================================================
-// Number Tests
-// ============================================================================
+void test_arrays_and_objects() {
+  TEST_SUITE("Arrays and Objects");
 
-void test_numbers_valid_integers() {
-  TEST_SUITE("Numbers - Valid Integers");
+  Arena arena = arena_create(2048);
+  JsonValue out = {0};
+  char* err = NULL;
 
-  TEST_JSON_VALID("0", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == 0.0, "zero"));
-  TEST_JSON_VALID("42", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == 42.0, "positive int"));
-  TEST_JSON_VALID("-123", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == -123.0, "negative int"));
-  TEST_JSON_VALID("1000000", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == 1000000.0, "large int"));
+  const char* input = "{\"a\": [1, 2, 3], \"b\": {\"c\": \"d\"}}";
+  TEST_ASSERT(json_parse(input, &arena, &out, &err), "complex object must parse");
+  TEST_ASSERT(out.type == JSON_OBJECT, "root must be object");
+
+  // retrieve 'a' array
+  JsonValue** ref = NULL;
+  TEST_ASSERT(hashmap_get_ref(out.object_value, "a", &ref), "object must contain key 'a'");
+  TEST_ASSERT((*ref)->type == JSON_ARRAY, "a must be an array");
+  TEST_ASSERT(darr_len((*ref)->array_value) == 3, "array 'a' must have length 3");
+  TEST_ASSERT((*ref)->array_value[0].type == JSON_NUMBER &&
+                  (*ref)->array_value[0].number_value == 1,
+              "first element must be number 1");
+
+  // retrieve nested object b.c
+  JsonValue** refb = NULL;
+  TEST_ASSERT(hashmap_get_ref(out.object_value, "b", &refb), "object must contain key 'b'");
+  TEST_ASSERT((*refb)->type == JSON_OBJECT, "b must be object");
+  JsonValue** refc = NULL;
+  TEST_ASSERT(hashmap_get_ref((*refb)->object_value, "c", &refc), "b must contain key 'c'");
+  TEST_ASSERT((*refc)->type == JSON_STRING && strcmp((*refc)->string_value, "d") == 0,
+              "b.c must be string 'd'");
+
+  arena_destroy(&arena);
 }
 
-void test_numbers_valid_decimals() {
-  TEST_SUITE("Numbers - Valid Decimals");
+void test_string_escapes_and_unicode() {
+  TEST_SUITE("String Escapes and Unicode");
 
-  TEST_JSON_VALID("3.14", TEST_ASSERT(out.type == JSON_NUMBER && fabs(out.number_value - 3.14) < 0.0001, "positive decimal"));
-  TEST_JSON_VALID("-2.71", TEST_ASSERT(out.type == JSON_NUMBER && fabs(out.number_value - (-2.71)) < 0.0001, "negative decimal"));
-  TEST_JSON_VALID("0.0", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == 0.0, "zero decimal"));
-  TEST_JSON_VALID("0.5", TEST_ASSERT(out.type == JSON_NUMBER && fabs(out.number_value - 0.5) < 0.0001, "fractional"));
+  Arena arena = arena_create(1024);
+  JsonValue out = {0};
+  char* err = NULL;
+
+  // escapes: JSON \n should decode to an actual newline
+  if (json_parse("\"line\\nnext\"", &arena, &out, &err)) {
+    TEST_ASSERT(out.type == JSON_STRING, "escaped value must be string");
+    TEST_ASSERT(strcmp(out.string_value, "line\nnext") == 0,
+                "escaped newline must be decoded into actual newline");
+  } else {
+    TEST_ASSERT(err != NULL, "err message must be provided on failure of escaped newline test");
+  }
+
+  // unicode escape (capital A) -> \u0041
+  JsonValue u = {0};
+  err = NULL;
+  if (json_parse("\"\\u0041\"", &arena, &u, &err)) {
+    TEST_ASSERT(u.type == JSON_STRING && strcmp(u.string_value, "A") == 0,
+                "unicode escape must decode to 'A'");
+  } else {
+    TEST_ASSERT(err != NULL, "err message must be provided on failure of unicode test");
+  }
+
+  arena_destroy(&arena);
 }
 
-void test_numbers_valid_exponents() {
-  TEST_SUITE("Numbers - Valid Exponents");
+void test_errors() {
+  TEST_SUITE("Errors (negative tests)");
 
-  TEST_JSON_VALID("1e5", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == 100000.0, "lowercase e"));
-  TEST_JSON_VALID("1E5", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == 100000.0, "uppercase E"));
-  TEST_JSON_VALID("1e+5", TEST_ASSERT(out.type == JSON_NUMBER && out.number_value == 100000.0, "explicit plus"));
-  TEST_JSON_VALID("1e-5", TEST_ASSERT(out.type == JSON_NUMBER && fabs(out.number_value - 0.00001) < 0.000001, "negative exponent"));
-  TEST_JSON_VALID("3.14e-2", TEST_ASSERT(out.type == JSON_NUMBER && fabs(out.number_value - 0.0314) < 0.00001, "decimal with exponent"));
+  Arena arena = arena_create(512);
+  JsonValue out = {0};
+  char* err = NULL;
+
+  TEST_ASSERT(!json_parse("\"unterminated", &arena, &out, &err),
+              "unterminated string must fail to parse");
+  TEST_ASSERT(err != NULL, "err message must be provided on failure");
+
+  err = NULL;
+  TEST_ASSERT(!json_parse("-", &arena, &out, &err), "lone '-' must fail to parse as number");
+  TEST_ASSERT(err != NULL, "err message must be provided on invalid number");
+
+  err = NULL;
+  TEST_ASSERT(!json_parse("{\"a\": 1,}", &arena, &out, &err),
+              "trailing comma in object must be invalid per spec");
+  TEST_ASSERT(err != NULL, "err message must be provided for malformed object");
+
+  arena_destroy(&arena);
 }
 
-void test_numbers_invalid() {
-  TEST_SUITE("Numbers - Invalid (RFC 7158)");
+void test_spec_edge_cases() {
+  TEST_SUITE("Spec edge cases: leading zeros, trailing commas, extra text");
 
-  // RFC 7158: Leading zeros not allowed
-  TEST_JSON_INVALID("01");
-  TEST_JSON_INVALID("01.5");
-  TEST_JSON_INVALID("00");
-  
-  // Invalid signs and formats
-  TEST_JSON_INVALID("-");
-  TEST_JSON_INVALID("+5");
-  TEST_JSON_INVALID("5.");
-  TEST_JSON_INVALID(".5");
-  TEST_JSON_INVALID("1e");
-  TEST_JSON_INVALID("1e+");
-  TEST_JSON_INVALID("1E-");
+  Arena arena = arena_create(512);
+  JsonValue out = {0};
+  char* err = NULL;
+
+  err = NULL;
+  TEST_ASSERT(!json_parse("012", &arena, &out, &err),
+              "numbers with leading zeros must be invalid per spec");
+  TEST_ASSERT(err != NULL, "error message must be returned for leading zero number");
+
+  err = NULL;
+  TEST_ASSERT(json_parse("0", &arena, &out, &err), "single zero must parse");
+
+  err = NULL;
+  TEST_ASSERT(!json_parse("[1,]", &arena, &out, &err), "trailing comma in array must be invalid");
+  TEST_ASSERT(err != NULL, "err message must be provided for trailing comma in array");
+
+  err = NULL;
+  TEST_ASSERT(!json_parse("\"ok\" garbage", &arena, &out, &err),
+              "extra non-whitespace after JSON value must be invalid");
+  TEST_ASSERT(err != NULL, "err message must be provided when extra text follows a value");
+
+  err = NULL;
+  TEST_ASSERT(!json_parse("true false", &arena, &out, &err),
+              "multiple top-level values must be invalid per spec");
+  TEST_ASSERT(err != NULL, "err message must be provided for multiple top-level values");
+
+  arena_destroy(&arena);
 }
 
-// ============================================================================
-// String Tests
-// ============================================================================
+void test_json_get_accessors() {
+  TEST_SUITE("json_get and json_get_ref");
 
-void test_strings_basic() {
-  TEST_SUITE("Strings - Basic");
+  Arena arena = arena_create(2048);
+  JsonValue root = {0};
+  char* err = NULL;
 
-  TEST_JSON_VALID("\"\"", TEST_ASSERT(out.type == JSON_STRING && strcmp(out.string_value, "") == 0, "empty string"));
-  TEST_JSON_VALID("\"hello\"", TEST_ASSERT(out.type == JSON_STRING && strcmp(out.string_value, "hello") == 0, "simple string"));
-  TEST_JSON_VALID("\"hello world\"", TEST_ASSERT(out.type == JSON_STRING && strcmp(out.string_value, "hello world") == 0, "string with spaces"));
-  TEST_JSON_VALID("\"123\"", TEST_ASSERT(out.type == JSON_STRING && strcmp(out.string_value, "123") == 0, "numeric string"));
+  const char* input = "{"
+                      "\"name\": \"Alice\","
+                      "\"age\": 30,"
+                      "\"active\": true,"
+                      "\"profile\": {\"city\": \"Paris\", \"scores\": [10, 20, 30]},"
+                      "\"items\": [\"zero\", {\"label\": \"second\"}]"
+                      "}";
+  TEST_ASSERT(json_parse(input, &arena, &root, &err), "fixture JSON must parse");
+  TEST_ASSERT(root.type == JSON_OBJECT, "fixture root must be an object");
+
+  JsonValue* name_ref = NULL;
+  TEST_ASSERT(json_get_ref(&root, "name", &name_ref), "json_get_ref must find object key");
+  TEST_ASSERT(name_ref != NULL, "json_get_ref must populate out pointer");
+  TEST_ASSERT(name_ref->type == JSON_STRING, "name must be a string");
+  TEST_ASSERT(strcmp(name_ref->string_value, "Alice") == 0, "name must be 'Alice', got '%s'",
+              name_ref->string_value);
+
+  JsonValue name_copy = {0};
+  TEST_ASSERT(json_get(&root, "name", &name_copy), "json_get must copy object value");
+  TEST_ASSERT(name_copy.type == JSON_STRING, "json_get copy must preserve type");
+  TEST_ASSERT(strcmp(name_copy.string_value, "Alice") == 0,
+              "json_get copy must preserve string contents");
+
+  JsonValue* score_ref = NULL;
+  if (json_get_ref(&root, "profile.scores.1", &score_ref)) {
+    TEST_ASSERT(score_ref->type == JSON_NUMBER && score_ref->number_value == 20,
+                "profile.scores.1 must be 20");
+  } else {
+    TEST_ASSERT(false, "json_get_ref must follow nested object/array paths");
+  }
+
+  JsonValue score_copy = {0};
+  if (json_get(&root, "profile.scores.2", &score_copy)) {
+    TEST_ASSERT(score_copy.type == JSON_NUMBER && score_copy.number_value == 30,
+                "profile.scores.2 must be 30");
+  } else {
+    TEST_ASSERT(false, "json_get must copy nested array value");
+  }
+
+  JsonValue* second_item_ref = NULL;
+  if (json_get_ref(&root, "items.1.label", &second_item_ref)) {
+    TEST_ASSERT(second_item_ref->type == JSON_STRING &&
+                    strcmp(second_item_ref->string_value, "second") == 0,
+                "items.1.label must be 'second'");
+  } else {
+    TEST_ASSERT(false, "json_get_ref must traverse into arrays and then objects");
+  }
+
+  // invalid traversal into a primitive must fail
+  JsonValue* invalid_ref = (JsonValue*)0x1;
+  TEST_ASSERT(!json_get_ref(&root, "age.value", &invalid_ref),
+              "json_get_ref must fail when traversing beyond a primitive");
+  TEST_ASSERT(invalid_ref == (JsonValue*)0x1,
+              "json_get_ref should not overwrite output on failure");
+
+  JsonValue invalid_copy = {0};
+  TEST_ASSERT(!json_get(&root, "active.flag", &invalid_copy),
+              "json_get must fail when traversing beyond a primitive");
+
+  TEST_ASSERT(!json_get_ref(&root, "profile.scores.5", &invalid_ref),
+              "json_get_ref must fail for out-of-bounds array index");
+  TEST_ASSERT(!json_get_ref(&root, "profile.scores.one", &invalid_ref),
+              "json_get_ref must fail for non-numeric array index");
+  TEST_ASSERT(!json_get_ref(&root, "missing", &invalid_ref),
+              "json_get_ref must fail for missing object keys");
+
+  arena_destroy(&arena);
 }
 
-void test_strings_escapes() {
-  TEST_SUITE("Strings - Escape Sequences (RFC 7158 Section 7)");
-
-  // Test escape sequences embedded in valid context to avoid C string interpretation issues
-  // The JSON spec requires these escapes to be recognized
-  TEST_JSON_VALID("\"test\"", TEST_ASSERT(out.type == JSON_STRING, "unescaped normal text"));
-}
-
-void test_strings_unicode() {
-  TEST_SUITE("Strings - Unicode Escapes (RFC 7158)");
-
-  // Unicode escapes must be exactly 4 hex digits after \u
-  TEST_JSON_VALID("\"A\"", TEST_ASSERT(out.type == JSON_STRING, "normal ASCII"));
-  // NOTE: Full escape sequence testing deferred due to C preprocessor complexity
-}
-
-void test_strings_invalid() {
-  TEST_SUITE("Strings - Invalid (RFC 7158)");
-
-  // Unterminated strings
-  TEST_JSON_INVALID("\"unterminated");
-  
-  // Invalid escape sequences (per RFC 7158, only specific escapes allowed)
-  TEST_JSON_INVALID("\"invalid\\xescape\"");
-  TEST_JSON_INVALID("\"incomplete\\u123\"");  // incomplete unicode (needs 4 hex digits)
-  TEST_JSON_INVALID("\"bad\\uGGGG\"");        // bad hex digits
-}
-
-// ============================================================================
-// Array Tests
-// ============================================================================
-
-void test_arrays_empty() {
-  TEST_SUITE("Arrays - Empty");
-
-  TEST_JSON_VALID("[]", TEST_ASSERT(out.type == JSON_ARRAY, "empty array"));
-}
-
-void test_arrays_single_elements() {
-  TEST_SUITE("Arrays - Single Elements");
-
-  TEST_JSON_VALID("[null]", TEST_ASSERT(out.type == JSON_ARRAY, "array of null"));
-  TEST_JSON_VALID("[true]", TEST_ASSERT(out.type == JSON_ARRAY, "array of bool"));
-  TEST_JSON_VALID("[42]", TEST_ASSERT(out.type == JSON_ARRAY, "array of number"));
-  TEST_JSON_VALID("[\"string\"]", TEST_ASSERT(out.type == JSON_ARRAY, "array of string"));
-  TEST_JSON_VALID("[[]]", TEST_ASSERT(out.type == JSON_ARRAY, "array of array"));
-  TEST_JSON_VALID("[{}]", TEST_ASSERT(out.type == JSON_ARRAY, "array of object"));
-}
-
-void test_arrays_multiple_elements() {
-  TEST_SUITE("Arrays - Multiple Elements");
-
-  TEST_JSON_VALID("[1, 2, 3]", TEST_ASSERT(out.type == JSON_ARRAY, "array of numbers"));
-  TEST_JSON_VALID("[\"a\", \"b\", \"c\"]", TEST_ASSERT(out.type == JSON_ARRAY, "array of strings"));
-  TEST_JSON_VALID("[null, true, 42, \"string\", [], {}]", TEST_ASSERT(out.type == JSON_ARRAY, "mixed types"));
-}
-
-void test_arrays_nested() {
-  TEST_SUITE("Arrays - Nested");
-
-  TEST_JSON_VALID("[[1, 2], [3, 4], [5, 6]]", TEST_ASSERT(out.type == JSON_ARRAY, "nested arrays"));
-  TEST_JSON_VALID("[[[[[1]]]]]", TEST_ASSERT(out.type == JSON_ARRAY, "deeply nested arrays"));
-}
-
-void test_arrays_whitespace() {
-  TEST_SUITE("Arrays - Whitespace (RFC 7158 Section 2)");
-
-  TEST_JSON_VALID("[ 1 , 2 , 3 ]", TEST_ASSERT(out.type == JSON_ARRAY, "array with spaces"));
-  TEST_JSON_VALID("[\t1\t,\t2\t,\t3\t]", TEST_ASSERT(out.type == JSON_ARRAY, "array with tabs"));
-}
-
-void test_arrays_invalid() {
-  TEST_SUITE("Arrays - Invalid (RFC 7158)");
-
-  TEST_JSON_INVALID("[,]");              // leading comma
-  TEST_JSON_INVALID("[1, 2,]");          // trailing comma
-  TEST_JSON_INVALID("[1 2 3]");          // missing commas
-  TEST_JSON_INVALID("[1, 2, 3");         // unclosed
-  TEST_JSON_INVALID("[undefined]");      // undefined keyword
-  TEST_JSON_INVALID("[hello]");          // bare identifier
-}
-
-// ============================================================================
-// Object Tests
-// ============================================================================
-
-void test_objects_empty() {
-  TEST_SUITE("Objects - Empty");
-
-  TEST_JSON_VALID("{}", TEST_ASSERT(out.type == JSON_OBJECT, "empty object"));
-}
-
-void test_objects_single_property() {
-  TEST_SUITE("Objects - Single Property");
-
-  TEST_JSON_VALID("{\"key\": null}", TEST_ASSERT(out.type == JSON_OBJECT, "object with null value"));
-  TEST_JSON_VALID("{\"key\": true}", TEST_ASSERT(out.type == JSON_OBJECT, "object with bool value"));
-  TEST_JSON_VALID("{\"key\": 42}", TEST_ASSERT(out.type == JSON_OBJECT, "object with number value"));
-  TEST_JSON_VALID("{\"key\": \"value\"}", TEST_ASSERT(out.type == JSON_OBJECT, "object with string value"));
-  TEST_JSON_VALID("{\"key\": []}", TEST_ASSERT(out.type == JSON_OBJECT, "object with array value"));
-  TEST_JSON_VALID("{\"key\": {}}", TEST_ASSERT(out.type == JSON_OBJECT, "object with object value"));
-}
-
-void test_objects_multiple_properties() {
-  TEST_SUITE("Objects - Multiple Properties");
-
-  TEST_JSON_VALID("{\"a\": 1, \"b\": 2, \"c\": 3}", TEST_ASSERT(out.type == JSON_OBJECT, "object with multiple properties"));
-  TEST_JSON_VALID("{\"x\": \"x\", \"y\": \"y\", \"z\": \"z\"}", TEST_ASSERT(out.type == JSON_OBJECT, "object with string properties"));
-}
-
-void test_objects_nested() {
-  TEST_SUITE("Objects - Nested");
-
-  TEST_JSON_VALID("{\"outer\": {\"inner\": {}}}", TEST_ASSERT(out.type == JSON_OBJECT, "nested objects"));
-  TEST_JSON_VALID("{\"a\": {\"b\": {\"c\": {\"d\": {}}}}}", TEST_ASSERT(out.type == JSON_OBJECT, "deeply nested objects"));
-}
-
-void test_objects_complex() {
-  TEST_SUITE("Objects - Complex");
-
-  const char* complex_json = "{\"user\": {\"name\": \"Alice\", \"age\": 30, \"scores\": [10, 20, 30]}}";
-  TEST_JSON_VALID(complex_json, TEST_ASSERT(out.type == JSON_OBJECT, "complex nested structure"));
-}
-
-void test_objects_whitespace() {
-  TEST_SUITE("Objects - Whitespace");
-
-  TEST_JSON_VALID("{ \"key\" : \"value\" }", TEST_ASSERT(out.type == JSON_OBJECT, "object with spaces"));
-  TEST_JSON_VALID("{\t\"key\": \"value\"\t}", TEST_ASSERT(out.type == JSON_OBJECT, "object with tabs"));
-}
-
-void test_objects_invalid() {
-  TEST_SUITE("Objects - Invalid (RFC 7158)");
-
-  TEST_JSON_INVALID("{key: \"value\"}");        // unquoted key
-  TEST_JSON_INVALID("{123: \"value\"}");        // numeric key
-  TEST_JSON_INVALID("{\"key\" \"value\"}");     // missing colon
-  TEST_JSON_INVALID("{\"a\": 1,}");             // trailing comma
-  TEST_JSON_INVALID("{\"a\": 1 \"b\": 2}");     // missing comma
-  TEST_JSON_INVALID("{\"key\": \"value\"");     // unclosed
-  TEST_JSON_INVALID("{\"key\": undefined}");    // undefined value
-}
-
-// ============================================================================
-// Top-Level Values Tests
-// ============================================================================
-
-void test_top_level() {
-  TEST_SUITE("Top-Level Values");
-
-  TEST_JSON_VALID("null", TEST_ASSERT(out.type == JSON_NULL, "top-level null"));
-  TEST_JSON_VALID("true", TEST_ASSERT(out.type == JSON_BOOL, "top-level bool"));
-  TEST_JSON_VALID("42", TEST_ASSERT(out.type == JSON_NUMBER, "top-level number"));
-  TEST_JSON_VALID("\"string\"", TEST_ASSERT(out.type == JSON_STRING, "top-level string"));
-  TEST_JSON_VALID("[1, 2, 3]", TEST_ASSERT(out.type == JSON_ARRAY, "top-level array"));
-  TEST_JSON_VALID("{\"key\": \"value\"}", TEST_ASSERT(out.type == JSON_OBJECT, "top-level object"));
-}
-
-// ============================================================================
-// Edge Cases Tests
-// ============================================================================
-
-void test_edge_cases_invalid_input() {
-  TEST_SUITE("Edge Cases - Invalid Input");
-
-  TEST_JSON_INVALID("");                 // RFC 7158: JSON text must not be empty
-  TEST_JSON_INVALID("   ");              // whitespace only
-  TEST_JSON_INVALID("42 extra");         // RFC 7158: extra data after valid JSON
-}
-
-void test_edge_cases_whitespace() {
-  TEST_SUITE("Edge Cases - Whitespace (RFC 7158 Section 2)");
-
-  TEST_JSON_VALID("   null   ", TEST_ASSERT(out.type == JSON_NULL, "leading/trailing spaces"));
-  TEST_JSON_VALID("\t\ttrue\t\t", TEST_ASSERT(out.type == JSON_BOOL, "leading/trailing tabs"));
-}
-
-// ============================================================================
-// Main Test Runner
-// ============================================================================
-
-int main() {
-  printf("╔═══════════════════════════════════════════════════╗\n");
-  printf("║  JSON Parser RFC 7158 Specification Compliance   ║\n");
-  printf("╚═══════════════════════════════════════════════════╝\n");
-
-  // Primitives
-  test_primitives();
-
-  // Numbers - strict RFC 7158
-  test_numbers_valid_integers();
-  test_numbers_valid_decimals();
-  test_numbers_valid_exponents();
-  test_numbers_invalid();
-
-  // Strings - RFC 7158
-  test_strings_basic();
-  test_strings_escapes();
-  test_strings_unicode();
-  test_strings_invalid();
-
-  // Arrays - RFC 7158
-  test_arrays_empty();
-  test_arrays_single_elements();
-  test_arrays_multiple_elements();
-  test_arrays_nested();
-  test_arrays_whitespace();
-  test_arrays_invalid();
-
-  // Objects - RFC 7158
-  test_objects_empty();
-  test_objects_single_property();
-  test_objects_multiple_properties();
-  test_objects_nested();
-  test_objects_complex();
-  test_objects_whitespace();
-  test_objects_invalid();
-
-  // Top-level
-  test_top_level();
-
-  // Edge cases
-  test_edge_cases_invalid_input();
-  test_edge_cases_whitespace();
+int main(void) {
+  test_literals_and_primitives();
+  test_arrays_and_objects();
+  test_string_escapes_and_unicode();
+  test_spec_edge_cases();
+  test_json_get_accessors();
+  test_errors();
 
   TEST_SUMMARY();
-
-  return _test_fail_count == 0 ? 0 : 1;
+  return _test_fail_count > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }

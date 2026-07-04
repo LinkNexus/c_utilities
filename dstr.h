@@ -157,15 +157,15 @@ static inline void arena_dstr_append(Arena* arena, Dstr* dstr, const char* c_str
   hdr->size += c_str_len;
 }
 
-static inline Dstr dstr_concat(const Dstr dstr, const char* c_str) {
-  Dstr res = dstr_from(dstr);
-  dstr_append(&res, c_str);
+static inline Dstr dstr_concat(const char* c_str1, const char* c_str2) {
+  Dstr res = dstr_from(c_str1);
+  dstr_append(&res, c_str2);
   return res;
 }
 
-static inline Dstr arena_dstr_concat(Arena* arena, const Dstr dstr, const char* c_str) {
-  Dstr res = arena_dstr_from(arena, dstr);
-  arena_dstr_append(arena, &res, c_str);
+static inline Dstr arena_dstr_concat(Arena* arena, const char* c_str1, const char* c_str2) {
+  Dstr res = arena_dstr_from(arena, c_str1);
+  arena_dstr_append(arena, &res, c_str2);
   return res;
 }
 
@@ -325,21 +325,21 @@ static inline void arena_dstr_append_utf8(Arena* arena, Dstr* dstr, int codepoin
   arena_dstr_append_fmt(arena, dstr, "%.*s", utf8_len, utf8_buf);
 }
 
-static inline Dstr dstr_concat_fmt(const Dstr dstr, const char* fmt, ...) {
+static inline Dstr dstr_concat_fmt(const char* c_str, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
 
   size_t new_len = dstr_va_req_len(fmt, args);
   if (new_len == 0) {
     va_end(args);
-    return dstr_from(dstr);
+    return dstr_from(c_str);
   }
 
-  size_t current_len = DSTR_HDR(dstr)->size;
+  size_t current_len = DSTR_HDR(c_str)->size;
   Dstr res = dstr_create();
   dstr_ensure_cap(&res, current_len + new_len + 1);
 
-  memcpy(res, dstr, current_len);
+  memcpy(res, c_str, current_len);
   vsnprintf(res + current_len, new_len + 1, fmt, args);
   DSTR_HDR(res)->size = current_len + new_len;
 
@@ -347,21 +347,21 @@ static inline Dstr dstr_concat_fmt(const Dstr dstr, const char* fmt, ...) {
   return res;
 }
 
-static inline Dstr arena_dstr_concat_fmt(Arena* arena, const Dstr dstr, const char* fmt, ...) {
+static inline Dstr arena_dstr_concat_fmt(Arena* arena, const char* c_str, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
 
   size_t new_len = dstr_va_req_len(fmt, args);
   if (new_len == 0) {
     va_end(args);
-    return arena_dstr_from(arena, dstr);
+    return arena_dstr_from(arena, c_str);
   }
 
-  size_t current_len = DSTR_HDR(dstr)->size;
+  size_t current_len = DSTR_HDR(c_str)->size;
   Dstr res = arena_dstr_create(arena);
   arena_dstr_ensure_cap(arena, &res, current_len + new_len + 1);
 
-  memcpy(res, dstr, current_len);
+  memcpy(res, c_str, current_len);
   vsnprintf(res + current_len, new_len + 1, fmt, args);
   DSTR_HDR(res)->size = current_len + new_len;
 
@@ -369,14 +369,14 @@ static inline Dstr arena_dstr_concat_fmt(Arena* arena, const Dstr dstr, const ch
   return res;
 }
 
-static inline Dstr dstr_concat_utf8(const Dstr dstr, int codepoint) {
-  Dstr res = dstr_from(dstr);
+static inline Dstr dstr_concat_utf8(const char* c_str, int codepoint) {
+  Dstr res = dstr_from(c_str);
   dstr_append_utf8(&res, codepoint);
   return res;
 }
 
-static inline Dstr arena_dstr_concat_utf8(Arena* arena, const Dstr dstr, int codepoint) {
-  Dstr res = dstr_from(dstr);
+static inline Dstr arena_dstr_concat_utf8(Arena* arena, const char* c_str, int codepoint) {
+  Dstr res = dstr_from(c_str);
   arena_dstr_append_utf8(arena, &res, codepoint);
   return res;
 }

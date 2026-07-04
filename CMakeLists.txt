@@ -18,6 +18,7 @@ set(TEST_SOURCES
   tests/test_hashmap.c
   tests/test_strv.c
   tests/test_dstr.c
+  tests/test_arena.c
 )
 
 enable_testing()

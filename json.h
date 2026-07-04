@@ -246,8 +246,8 @@ static inline bool json_lexer_read_string(Arena* arena, JsonLexerCtx* ctx,
             break;
           }
           default: {
-           ctx->err->msg =
-                 arena_dstr_fmt(arena, "Invalid escape character %c in string literal", escaped);
+            ctx->err->msg =
+                arena_dstr_fmt(arena, "Invalid escape character %c in string literal", escaped);
             ctx->err->span = json_lexer_capture_end(ctx, start);
             return false;
           }
@@ -256,7 +256,7 @@ static inline bool json_lexer_read_string(Arena* arena, JsonLexerCtx* ctx,
 
       case '\n':
       case '\r':
-         ctx->err->msg = "Unescaped new line in string literal";
+        ctx->err->msg = "Unescaped new line in string literal";
         ctx->err->span = json_lexer_capture_end(ctx, start);
         return false;
 
@@ -274,7 +274,7 @@ static inline bool json_lexer_read_string(Arena* arena, JsonLexerCtx* ctx,
     }
   }
 
-   ctx->err->msg = "Unexpected end of input in string literal";
+  ctx->err->msg = "Unexpected end of input in string literal";
   ctx->err->span = json_lexer_capture_end(ctx, start);
   return false;
 }
@@ -568,7 +568,7 @@ static inline bool json_parse_object(JsonParserCtx* ctx, JsonValue* out, const D
   JsonToken* start = json_parser_eat(ctx, JSON_TOKEN_LBRACE);
   if (!start)
     return false;
-  
+
   JsonProp* props = NULL;
 
   if (darr_len(*ctx->tokens) <= ctx->pos) {
@@ -592,11 +592,11 @@ static inline bool json_parse_object(JsonParserCtx* ctx, JsonValue* out, const D
       return false;
     }
 
-     Dstr key = arena_dstr_concat_fmt(arena, id, ".%s", key_token->value);
-     if (!json_parser_eat(ctx, JSON_TOKEN_COLON)) {
-       return false;
-     }
-     JsonValue* value = arena_alloc(arena, sizeof *value);
+    Dstr key = arena_dstr_concat_fmt(arena, id, ".%s", key_token->value);
+    if (!json_parser_eat(ctx, JSON_TOKEN_COLON)) {
+      return false;
+    }
+    JsonValue* value = arena_alloc(arena, sizeof *value);
 
     if (!json_parse_value(ctx, value, key, arena)) {
       return false;
@@ -604,12 +604,12 @@ static inline bool json_parse_object(JsonParserCtx* ctx, JsonValue* out, const D
 
     arena_hashmap_set(arena, props, key_token->value, value);
 
-     switch ((*ctx->tokens)[ctx->pos].type) {
-       case JSON_TOKEN_COMMA:
-         if (!json_parser_eat(ctx, JSON_TOKEN_COMMA)) {
-           return false;
-         }
-         break;
+    switch ((*ctx->tokens)[ctx->pos].type) {
+      case JSON_TOKEN_COMMA:
+        if (!json_parser_eat(ctx, JSON_TOKEN_COMMA)) {
+          return false;
+        }
+        break;
       case JSON_TOKEN_RBRACE:
         JsonToken* end = json_parser_eat(ctx, JSON_TOKEN_RBRACE);
         out->type = JSON_OBJECT;
@@ -630,7 +630,7 @@ static inline bool json_parse_array(JsonParserCtx* ctx, JsonValue* out, const Ds
   JsonToken* start = json_parser_eat(ctx, JSON_TOKEN_LBRACKET);
   if (!start)
     return false;
-  
+
   JsonValue* elements = NULL;
 
   if (darr_len(*ctx->tokens) <= ctx->pos) {
@@ -662,13 +662,13 @@ static inline bool json_parse_array(JsonParserCtx* ctx, JsonValue* out, const Ds
 
     arena_darr_append(arena, elements, value);
 
-     switch ((*ctx->tokens)[ctx->pos].type) {
-       case JSON_TOKEN_COMMA:
-         if (!json_parser_eat(ctx, JSON_TOKEN_COMMA)) {
-           return false;
-         }
-         idx++;
-         break;
+    switch ((*ctx->tokens)[ctx->pos].type) {
+      case JSON_TOKEN_COMMA:
+        if (!json_parser_eat(ctx, JSON_TOKEN_COMMA)) {
+          return false;
+        }
+        idx++;
+        break;
 
       case JSON_TOKEN_RBRACKET:
         JsonToken* end = json_parser_eat(ctx, JSON_TOKEN_RBRACKET);
@@ -699,14 +699,87 @@ static inline bool json_parse(const char* input, Arena* target_arena, JsonValue*
   JsonParserCtx parser_ctx = {.tokens = &tokens, .pos = 0, .err = &err};
   Arena arena = arena_create(1024);
 
-  if (!json_tokenize(&arena, input, &tokens, &err) ||
-      !json_parse_value(&parser_ctx, out, arena_dstr_from(&arena, "$"), target_arena)) {
+  if (!json_tokenize(&arena, input, &tokens, &err)) {
+    *err_msg = json_build_error_msg(&arena, target_arena, &err);
+    arena_destroy(&arena);
+    return false;
+  }
+
+  if (!json_parse_value(&parser_ctx, out, arena_dstr_from(&arena, "$"), target_arena)) {
+    *err_msg = json_build_error_msg(&arena, target_arena, &err);
+    arena_destroy(&arena);
+    return false;
+  }
+
+  if (darr_len(tokens) > parser_ctx.pos && tokens[parser_ctx.pos].type != JSON_TOKEN_EOF) {
+    err.msg = "Extra data after top-level JSON value";
+    err.span = tokens[parser_ctx.pos].span;
     *err_msg = json_build_error_msg(&arena, target_arena, &err);
     arena_destroy(&arena);
     return false;
   }
 
   arena_destroy(&arena);
+  return true;
+}
+
+static inline bool json_get_ref(JsonValue* root, const char* path, JsonValue** out) {
+  Strv* fragments = strv_split(strv_from(path), '.');
+  JsonValue* current = root;
+
+  for (size_t i = 0; i < darr_len(fragments); ++i) {
+    Strv* segment = &fragments[i];
+    Dstr key = dstr_from_strv(*segment);
+
+    if (current->type == JSON_OBJECT) {
+      JsonValue* next;
+
+      if (!hashmap_get(current->object_value, key, &next)) {
+        darr_destroy(fragments);
+        dstr_destroy(key);
+        return false;
+      }
+
+      current = next;
+      dstr_destroy(key);
+    } else if (current->type == JSON_ARRAY) {
+      char* endptr;
+      long idx = strtol(key, &endptr, 10);
+
+      if (*endptr != '\0' || idx < 0 || (size_t)idx >= darr_len(current->array_value)) {
+        darr_destroy(fragments);
+        dstr_destroy(key);
+        return false;
+      }
+
+      JsonValue* next = &current->array_value[idx];
+      if (!next) {
+        darr_destroy(fragments);
+        dstr_destroy(key);
+        return false;
+      }
+
+      current = next;
+      dstr_destroy(key);
+    } else {
+      darr_destroy(fragments);
+      dstr_destroy(key);
+      return false;
+    }
+  }
+
+  *out = current;
+  darr_destroy(fragments);
+  return true;
+}
+
+static inline bool json_get(JsonValue* root, const char* path, JsonValue* out) {
+  JsonValue* ref;
+  if (!json_get_ref(root, path, &ref)) {
+    return false;
+  }
+
+  *out = *ref;
   return true;
 }
 

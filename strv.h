@@ -2,6 +2,7 @@
 #define C_UTILS_STRING_VIEWS
 
 #include "darr.h"
+#include "arena.h"
 #include "utils.h"
 #include <stdbool.h>
 #include <stddef.h>
@@ -11,6 +12,12 @@ typedef struct {
   const char *buf;
   size_t len;
 } Strv;
+
+static inline Strv arena_strv_from(Arena *arena, const char *c_str) {
+  size_t len = strlen(c_str);
+  char *buf = arena_strndup(arena, c_str, len);
+  return (Strv){.buf = buf, .len = len};
+}
 
 static inline Strv strv_from(const char *c_str) {
   return (Strv){.buf = c_str, .len = strlen(c_str)};
@@ -147,6 +154,89 @@ static inline Strv *strv_split(const Strv strv, const char delim) {
   Strv sub_strv = strv_substr(strv, start, strv.len - start);
   if (sub_strv.len > 0 || strv.buf[strv.len - 1] == delim) {
     darr_append(parts, sub_strv);
+  }
+
+  return parts;
+}
+
+static inline Strv *arena_strv_split(Arena *arena, const Strv strv,
+                                     const char delim) {
+  (void)arena;
+  Strv *parts = NULL;
+  size_t start = 0;
+
+  arena_darr_init(arena, parts);
+
+  if (strv.len == 0)
+    return parts;
+
+  for (size_t i = 0; i < strv.len; ++i) {
+    if (strv.buf[i] == delim) {
+      Strv sub_str = strv_substr(strv, start, i - start);
+      arena_darr_append(arena, parts, sub_str);
+      start = i + 1;
+    }
+  }
+
+  Strv sub_strv = strv_substr(strv, start, strv.len - start);
+  if (sub_strv.len > 0 || strv.buf[strv.len - 1] == delim) {
+    arena_darr_append(arena, parts, sub_strv);
+  }
+
+  return parts;
+}
+
+static inline Strv *arena_strv_split_str(Arena *arena, const Strv strv,
+                                         const Strv delim) {
+  Strv *parts = NULL;
+  size_t start = 0;
+
+  arena_darr_init(arena, parts);
+
+  if (delim.len == 0)
+    return parts;
+
+  while (start <= strv.len) {
+    size_t idx = strv_find(strv_substr(strv, start, strv.len - start), delim);
+    if (idx == (size_t)-1) {
+      break;
+    }
+    Strv sub_strv = strv_substr(strv, start, idx);
+    arena_darr_append(arena, parts, sub_strv);
+    start += idx + delim.len;
+  }
+
+  Strv sub_strv = strv_substr(strv, start, strv.len - start);
+  if (sub_strv.len > 0 ||
+      (strv.len >= delim.len &&
+       strv_cmp(strv_substr(strv, strv.len - delim.len, delim.len), delim) ==
+           0)) {
+    arena_darr_append(arena, parts, sub_strv);
+  }
+
+  return parts;
+}
+
+static inline Strv *arena_strv_split_any(Arena *arena, const Strv strv,
+                                         const Strv char_set) {
+  Strv *parts = NULL;
+  size_t start = 0;
+
+  arena_darr_init(arena, parts);
+
+  for (size_t i = 0; i < strv.len; ++i) {
+    if (strv_find_char(char_set, strv.buf[i]) != (size_t)-1) {
+      Strv sub_strv = strv_substr(strv, start, i - start);
+      arena_darr_append(arena, parts, sub_strv);
+      start = i + 1;
+    }
+  }
+
+  Strv sub_strv = strv_substr(strv, start, strv.len - start);
+  if (sub_strv.len > 0 ||
+      (strv.len > 0 &&
+       strv_find_char(char_set, strv.buf[strv.len - 1]) != (size_t)-1)) {
+    arena_darr_append(arena, parts, sub_strv);
   }
 
   return parts;

@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-void test_construction() {
+void test_construction()
+{
   TEST_SUITE("Construction");
 
   Strv s = strv_from("hello");
@@ -20,7 +21,8 @@ void test_construction() {
   TEST_ASSERT(empty.len == 0, "empty strv len must be 0, got %zu", empty.len);
 }
 
-void test_cmp_eq() {
+void test_cmp_eq()
+{
   TEST_SUITE("Compare / Equal");
 
   Strv a = strv_from("hello");
@@ -41,7 +43,8 @@ void test_cmp_eq() {
   TEST_ASSERT(strv_cmp(d, a) < 0, "cmp 'hell' < 'hello' must be negative");
 }
 
-void test_substr() {
+void test_substr()
+{
   TEST_SUITE("Substr");
 
   Strv s = strv_from("hello world");
@@ -64,7 +67,8 @@ void test_substr() {
               "substr with overlong len must clamp to remaining");
 }
 
-void test_slice() {
+void test_slice()
+{
   TEST_SUITE("Slice");
 
   Strv s = strv_from("hello world");
@@ -79,7 +83,8 @@ void test_slice() {
   TEST_ASSERT(sl3.len == 0, "slice beyond len must be empty, got %zu", sl3.len);
 }
 
-void test_find() {
+void test_find()
+{
   TEST_SUITE("Find");
 
   Strv s = strv_from("hello world");
@@ -102,7 +107,8 @@ void test_find() {
               "find_char missing char must return SIZE_MAX");
 }
 
-void test_rfind() {
+void test_rfind()
+{
   TEST_SUITE("Rfind");
 
   Strv s = strv_from("hello hello");
@@ -116,7 +122,8 @@ void test_rfind() {
               "rfind missing substring must return SIZE_MAX");
 }
 
-void test_starts_ends_with() {
+void test_starts_ends_with()
+{
   TEST_SUITE("Starts/ends with");
 
   Strv s = strv_from("hello world");
@@ -138,7 +145,8 @@ void test_starts_ends_with() {
               "shorter string must not end with longer suffix");
 }
 
-void test_trim() {
+void test_trim()
+{
   TEST_SUITE("Trim");
 
   Strv s = strv_from("  hello  ");
@@ -171,7 +179,8 @@ void test_trim() {
               strv_trim(spaces).len);
 }
 
-void test_split() {
+void test_split()
+{
   TEST_SUITE("Split");
 
   Strv s = strv_from("a,b,c,d");
@@ -201,7 +210,8 @@ void test_split() {
               "single part must equal original");
 }
 
-void test_split_str() {
+void test_split_str()
+{
   TEST_SUITE("Split str");
 
   Strv s = strv_from("a::b::c");
@@ -228,7 +238,8 @@ void test_split_str() {
               "no delimiter must produce 1 part, got %zu", darr_len(parts3));
 }
 
-void test_split_any() {
+void test_split_any()
+{
   TEST_SUITE("Split any");
 
   Strv s = strv_from("a,b;c.d");
@@ -251,7 +262,31 @@ void test_split_any() {
               "middle part between consecutive delimiters must be empty");
 }
 
-int main(void) {
+void test_arena_split()
+{
+  TEST_SUITE("Arena split");
+
+  Arena arena = arena_create(512);
+
+  Strv s = strv_from("a,b,c");
+  Strv *parts = arena_strv_split(&arena, s, ',');
+  TEST_ASSERT(darr_len(parts) == 3, "arena_split must produce 3 parts, got %zu",
+              darr_len(parts));
+  TEST_ASSERT(strv_eq(parts[0], strv_from("a")), "parts[0] must be 'a'");
+  TEST_ASSERT(strv_eq(parts[1], strv_from("b")), "parts[1] must be 'b'");
+  TEST_ASSERT(strv_eq(parts[2], strv_from("c")), "parts[2] must be 'c'");
+
+  Strv s2 = strv_from("a::b::");
+  Strv *parts2 = arena_strv_split_str(&arena, s2, strv_from("::"));
+  TEST_ASSERT(darr_len(parts2) == 3,
+              "arena_split_str must produce 3 parts, got %zu", darr_len(parts2));
+  TEST_ASSERT(parts2[2].len == 0, "last part must be empty after trailing delim");
+
+  arena_destroy(&arena);
+}
+
+int main(void)
+{
   test_construction();
   test_cmp_eq();
   test_substr();
@@ -263,6 +298,7 @@ int main(void) {
   test_split();
   test_split_str();
   test_split_any();
+  test_arena_split();
 
   TEST_SUMMARY();
   return _test_fail_count > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
